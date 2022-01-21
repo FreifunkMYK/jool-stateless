@@ -6,16 +6,10 @@
 #include "usr/argp/log.h"
 #include "usr/argp/requirements.h"
 #include "usr/argp/wargp.h"
-#include "usr/argp/xlator_type.h"
 #include "usr/util/str_utils.h"
 #include "usr/nl/core.h"
 #include "usr/nl/instance.h"
 
-#define OPTNAME_NETFILTER		"netfilter"
-#define OPTNAME_IPTABLES		"iptables"
-
-#define ARGP_IPTABLES 1000
-#define ARGP_NETFILTER 1001
 #define ARGP_POOL6 '6'
 
 struct wargp_iname {
@@ -73,12 +67,7 @@ static void print_table_divisor(void)
 static void print_entry_csv(struct instance_entry_usr const *entry)
 {
 	printf("%" PRIx64 ",%s,", (uint64_t)entry->ns, entry->iname);
-	if (entry->xf & XF_NETFILTER)
-		printf("netfilter");
-	else if (entry->xf & XF_IPTABLES)
-		printf("iptables");
-	else
-		printf("unknown");
+	printf("netfilter");
 	printf("\n");
 }
 
@@ -91,12 +80,7 @@ static void print_entry_normal(struct instance_entry_usr const *entry)
 	 * pointers.
 	 */
 	printf("| %18" PRIx64 " | %15s | ", (uint64_t)entry->ns, entry->iname);
-	if (entry->xf & XF_NETFILTER)
-		printf("netfilter");
-	else if (entry->xf & XF_IPTABLES)
-		printf(" iptables");
-	else
-		printf("  unknown");
+	printf("netfilter");
 	printf(" |\n");
 }
 
@@ -124,7 +108,7 @@ int handle_instance_display(char *iname, int argc, char **argv, void const *arg)
 	if (result.error)
 		return result.error;
 
-	result = joolnl_setup(&sk, xt_get());
+	result = joolnl_setup(&sk);
 	if (result.error)
 		return pr_result(&result);
 
@@ -160,26 +144,12 @@ void autocomplete_instance_display(void const *args)
 
 struct add_args {
 	struct wargp_iname iname;
-	struct wargp_bool iptables;
-	struct wargp_bool netfilter;
 	struct wargp_prefix6 pool6;
 };
 
 static struct wargp_option add_opts[] = {
 	WARGP_INAME(struct add_args, iname, "add"),
 	{
-		.name = OPTNAME_IPTABLES,
-		.key = ARGP_IPTABLES,
-		.doc = "Sit the translator on top of iptables",
-		.offset = offsetof(struct add_args, iptables),
-		.type = &wt_bool,
-	}, {
-		.name = OPTNAME_NETFILTER,
-		.key = ARGP_NETFILTER,
-		.doc = "Sit the translator on top of Netfilter",
-		.offset = offsetof(struct add_args, netfilter),
-		.type = &wt_bool,
-	}, {
 		.name = "pool6",
 		.key = ARGP_POOL6,
 		.doc = "Prefix that will populate the IPv6 Address Pool",
@@ -193,7 +163,6 @@ int handle_instance_add(char *iname, int argc, char **argv, void const *arg)
 {
 	struct add_args aargs = { 0 };
 	struct joolnl_socket sk;
-	xlator_framework xf;
 	struct jool_result result;
 
 	result.error = wargp_parse(add_opts, argc, argv, &aargs);
@@ -208,25 +177,11 @@ int handle_instance_add(char *iname, int argc, char **argv, void const *arg)
 	if (!iname && aargs.iname.set)
 		iname = aargs.iname.value;
 
-	/* Validate framework */
-	if (!aargs.netfilter.value && !aargs.iptables.value) {
-		pr_err("Please specify instance framework. (--"
-				OPTNAME_NETFILTER " or --"
-				OPTNAME_IPTABLES ".)");
-		pr_err("(The Jool 3.5 behavior was --" OPTNAME_NETFILTER ".)");
-		return -EINVAL;
-	}
-	if (aargs.netfilter.value && aargs.iptables.value) {
-		pr_err("The translator can only be hooked to one framework.");
-		return -EINVAL;
-	}
-
-	result = joolnl_setup(&sk, xt_get());
+	result = joolnl_setup(&sk);
 	if (result.error)
 		return pr_result(&result);
 
-	xf = aargs.netfilter.value ? XF_NETFILTER : XF_IPTABLES;
-	result = joolnl_instance_add(&sk, xf, iname,
+	result = joolnl_instance_add(&sk, iname,
 			aargs.pool6.set ? &aargs.pool6.prefix : NULL);
 
 	joolnl_teardown(&sk);
@@ -264,7 +219,7 @@ int handle_instance_remove(char *iname, int argc, char **argv, void const *arg)
 	if (!iname && rargs.iname.set)
 		iname = rargs.iname.value;
 
-	result = joolnl_setup(&sk, xt_get());
+	result = joolnl_setup(&sk);
 	if (result.error)
 		return pr_result(&result);
 
@@ -295,7 +250,7 @@ int handle_instance_flush(char *iname, int argc, char **argv, void const *arg)
 	if (result.error)
 		return result.error;
 
-	result = joolnl_setup(&sk, xt_get());
+	result = joolnl_setup(&sk);
 	if (result.error)
 		return pr_result(&result);
 
@@ -332,7 +287,7 @@ int handle_instance_status(char *iname, int argc, char **argv, void const *arg)
 	if (result.error)
 		return result.error;
 
-	result = joolnl_setup(&sk, xt_get());
+	result = joolnl_setup(&sk);
 	if (result.error == -ESRCH)
 		printf("%s", DEAD_MSG);
 	if (result.error)

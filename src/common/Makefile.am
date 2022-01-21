@@ -14,8 +14,6 @@ noinst_HEADERS = \
 	config.c config.h \
 	constants.h \
 	global.c global.h \
-	iptables.h \
-	session.h \
 	stats.h \
 	types.c types.h \
 	xlat.h

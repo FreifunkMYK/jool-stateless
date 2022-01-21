@@ -22,7 +22,6 @@ struct jool_result joolnl_instance_hello(
 
 struct jool_result joolnl_instance_add(
 	struct joolnl_socket *sk,
-	xlator_framework xf,
 	char const *iname,
 	struct ipv6_prefix const *pool6
 );

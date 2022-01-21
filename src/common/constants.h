@@ -83,16 +83,6 @@
 #define DEFAULT_RANDOMIZE_RFC6791 true
 #define DEFAULT_MTU_PLATEAUS { 65535, 32000, 17914, 8166, 4352, 2002, 1492, \
 		1006, 508, 296, 68 }
-#define DEFAULT_JOOLD_ENABLED false
-#define DEFAULT_JOOLD_FLUSH_ASAP true
-#define DEFAULT_JOOLD_DEADLINE 2
-#define DEFAULT_JOOLD_CAPACITY 512
-/**
- * typical MTU minus max(20, 40) minus the UDP header. (1500 - 40 - 8)
- * There's a 16-bytes joold header and each session spans 64 bytes currently.
- * This means we can fit 22 sessions per packet. (Regardless of IPv4/IPv6)
- */
-#define DEFAULT_JOOLD_MAX_PAYLOAD 1452
 
 /* -- IPv6 Pool -- */
 
@@ -103,10 +93,6 @@
  */
 #define POOL6_PREFIX_LENGTHS { 32, 40, 48, 56, 64, 96 }
 
-
-/* -- IPv4 pool -- */
-#define DEFAULT_POOL4_MIN_PORT 61001
-#define DEFAULT_POOL4_MAX_PORT 65535
 
 
 /* -- ICMP constants missing from icmp.h and icmpv6.h. -- */

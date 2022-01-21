@@ -8,7 +8,6 @@
 #include "usr/argp/log.h"
 #include "usr/argp/requirements.h"
 #include "usr/argp/wargp.h"
-#include "usr/argp/xlator_type.h"
 
 struct query_args {
 	struct wargp_bool verbose;
@@ -189,7 +188,7 @@ int handle_address_query(char *iname, int argc, char **argv, void const *arg)
 		return requirement_print(reqs);
 	}
 
-	result = joolnl_setup(&sk, xt_get());
+	result = joolnl_setup(&sk);
 	if (result.error)
 		return pr_result(&result);
 

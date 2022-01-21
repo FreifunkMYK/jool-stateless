@@ -5,7 +5,6 @@
 #include "usr/argp/log.h"
 #include "usr/argp/userspace-types.h"
 #include "usr/argp/wargp.h"
-#include "usr/argp/xlator_type.h"
 
 struct display_args {
 	struct wargp_bool all;
@@ -64,7 +63,7 @@ int handle_stats_display(char *iname, int argc, char **argv, void const *arg)
 	if (result.error)
 		return result.error;
 
-	result = joolnl_setup(&sk, xt_get());
+	result = joolnl_setup(&sk);
 	if (result.error)
 		return pr_result(&result);
 

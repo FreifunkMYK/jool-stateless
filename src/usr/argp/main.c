@@ -16,17 +16,12 @@
 #include "usr/nl/file.h"
 #include "usr/argp/command.h"
 #include "usr/argp/log.h"
-#include "usr/argp/xlator_type.h"
 #include "usr/argp/wargp/address.h"
-#include "usr/argp/wargp/bib.h"
 #include "usr/argp/wargp/denylist4.h"
 #include "usr/argp/wargp/eamt.h"
 #include "usr/argp/wargp/file.h"
 #include "usr/argp/wargp/global.h"
 #include "usr/argp/wargp/instance.h"
-#include "usr/argp/wargp/joold.h"
-#include "usr/argp/wargp/pool4.h"
-#include "usr/argp/wargp/session.h"
 #include "usr/argp/wargp/stats.h"
 
 #define DISPLAY "display"
@@ -40,27 +35,22 @@ static int handle_autocomplete(char *junk, int argc, char **argv, void const *ar
 static struct cmd_option instance_ops[] = {
 		{
 			.label = DISPLAY,
-			.xt = XT_ANY,
 			.handler = handle_instance_display,
 			.handle_autocomplete = autocomplete_instance_display,
 		}, {
 			.label = ADD,
-			.xt = XT_ANY,
 			.handler = handle_instance_add,
 			.handle_autocomplete = autocomplete_instance_add,
 		}, {
 			.label = REMOVE,
-			.xt = XT_ANY,
 			.handler = handle_instance_remove,
 			.handle_autocomplete = autocomplete_instance_remove,
 		}, {
 			.label = FLUSH,
-			.xt = XT_ANY,
 			.handler = handle_instance_flush,
 			.handle_autocomplete = autocomplete_instance_flush,
 		}, {
 			.label = "status",
-			.xt = XT_ANY,
 			.handler = handle_instance_status,
 			.handle_autocomplete = autocomplete_instance_status,
 		},
@@ -70,7 +60,6 @@ static struct cmd_option instance_ops[] = {
 static struct cmd_option stats_ops[] = {
 		{
 			.label = DISPLAY,
-			.xt = XT_ANY,
 			.handler = handle_stats_display,
 			.handle_autocomplete = autocomplete_stats_display,
 		},
@@ -80,7 +69,6 @@ static struct cmd_option stats_ops[] = {
 static struct cmd_option address_ops[] = {
 		{
 			.label = "query",
-			.xt = XT_SIIT,
 			.handler = handle_address_query,
 			.handle_autocomplete = autocomplete_address_query,
 		},
@@ -90,12 +78,10 @@ static struct cmd_option address_ops[] = {
 static struct cmd_option global_ops[] = {
 		{
 			.label = DISPLAY,
-			.xt = XT_ANY,
 			.handler = handle_global_display,
 			.handle_autocomplete = autocomplete_global_display,
 		}, {
 			.label = UPDATE,
-			.xt = XT_ANY,
 			.child_builder = build_global_update_children,
 		},
 		{ 0 },
@@ -104,22 +90,18 @@ static struct cmd_option global_ops[] = {
 static struct cmd_option eamt_ops[] = {
 		{
 			.label = DISPLAY,
-			.xt = XT_SIIT,
 			.handler = handle_eamt_display,
 			.handle_autocomplete = autocomplete_eamt_display,
 		}, {
 			.label = ADD,
-			.xt = XT_SIIT,
 			.handler = handle_eamt_add,
 			.handle_autocomplete = autocomplete_eamt_add,
 		}, {
 			.label = REMOVE,
-			.xt = XT_SIIT,
 			.handler = handle_eamt_remove,
 			.handle_autocomplete = autocomplete_eamt_remove,
 		}, {
 			.label = FLUSH,
-			.xt = XT_SIIT,
 			.handler = handle_eamt_flush,
 			.handle_autocomplete = autocomplete_eamt_flush,
 		},
@@ -129,22 +111,18 @@ static struct cmd_option eamt_ops[] = {
 static struct cmd_option blacklist4_ops[] = {
 		{
 			.label = DISPLAY,
-			.xt = XT_SIIT,
 			.handler = handle_blacklist4_display,
 			.handle_autocomplete = autocomplete_denylist4_display,
 		}, {
 			.label = ADD,
-			.xt = XT_SIIT,
 			.handler = handle_blacklist4_add,
 			.handle_autocomplete = autocomplete_denylist4_add,
 		}, {
 			.label = REMOVE,
-			.xt = XT_SIIT,
 			.handler = handle_blacklist4_remove,
 			.handle_autocomplete = autocomplete_denylist4_remove,
 		}, {
 			.label = FLUSH,
-			.xt = XT_SIIT,
 			.handler = handle_blacklist4_flush,
 			.handle_autocomplete = autocomplete_denylist4_flush,
 		},
@@ -154,79 +132,20 @@ static struct cmd_option blacklist4_ops[] = {
 static struct cmd_option denylist4_ops[] = {
 		{
 			.label = DISPLAY,
-			.xt = XT_SIIT,
 			.handler = handle_denylist4_display,
 			.handle_autocomplete = autocomplete_denylist4_display,
 		}, {
 			.label = ADD,
-			.xt = XT_SIIT,
 			.handler = handle_denylist4_add,
 			.handle_autocomplete = autocomplete_denylist4_add,
 		}, {
 			.label = REMOVE,
-			.xt = XT_SIIT,
 			.handler = handle_denylist4_remove,
 			.handle_autocomplete = autocomplete_denylist4_remove,
 		}, {
 			.label = FLUSH,
-			.xt = XT_SIIT,
 			.handler = handle_denylist4_flush,
 			.handle_autocomplete = autocomplete_denylist4_flush,
-		},
-		{ 0 },
-};
-
-struct cmd_option pool4_ops[] = {
-		{
-			.label = DISPLAY,
-			.xt = XT_NAT64,
-			.handler = handle_pool4_display,
-			.handle_autocomplete = autocomplete_pool4_display,
-		}, {
-			.label = ADD,
-			.xt = XT_NAT64,
-			.handler = handle_pool4_add,
-			.handle_autocomplete = autocomplete_pool4_add,
-		}, {
-			.label = REMOVE,
-			.xt = XT_NAT64,
-			.handler = handle_pool4_remove,
-			.handle_autocomplete = autocomplete_pool4_remove,
-		}, {
-			.label = FLUSH,
-			.xt = XT_NAT64,
-			.handler = handle_pool4_flush,
-			.handle_autocomplete = autocomplete_pool4_flush,
-		},
-		{ 0 },
-};
-
-static struct cmd_option bib_ops[] = {
-		{
-			.label = DISPLAY,
-			.xt = XT_NAT64,
-			.handler = handle_bib_display,
-			.handle_autocomplete = autocomplete_bib_display,
-		}, {
-			.label = ADD,
-			.xt = XT_NAT64,
-			.handler = handle_bib_add,
-			.handle_autocomplete = autocomplete_bib_add,
-		}, {
-			.label = REMOVE,
-			.xt = XT_NAT64,
-			.handler = handle_bib_remove,
-			.handle_autocomplete = autocomplete_bib_remove,
-		},
-		{ 0 },
-};
-
-static struct cmd_option session_ops[] = {
-		{
-			.label = DISPLAY,
-			.xt = XT_NAT64,
-			.handler = handle_session_display,
-			.handle_autocomplete = autocomplete_session_display,
 		},
 		{ 0 },
 };
@@ -234,19 +153,8 @@ static struct cmd_option session_ops[] = {
 static struct cmd_option file_ops[] = {
 		{
 			.label = "handle",
-			.xt = XT_ANY,
 			.handler = handle_file_update,
 			.handle_autocomplete = autocomplete_file_update,
-		},
-		{ 0 },
-};
-
-static struct cmd_option joold_ops[] = {
-		{
-			.label = "advertise",
-			.xt = XT_NAT64,
-			.handler = handle_joold_advertise,
-			.handle_autocomplete = autocomplete_joold_advertise,
 		},
 		{ 0 },
 };
@@ -254,56 +162,31 @@ static struct cmd_option joold_ops[] = {
 struct cmd_option tree[] = {
 		{
 			.label = "instance",
-			.xt = XT_ANY,
 			.children = instance_ops,
 		}, {
 			.label = "stats",
-			.xt = XT_ANY,
 			.children = stats_ops,
 		}, {
 			.label = "address",
-			.xt = XT_SIIT,
 			.children = address_ops,
 		}, {
 			.label = "global",
-			.xt = XT_ANY,
 			.children = global_ops,
 		}, {
 			.label = "eamt",
-			.xt = XT_SIIT,
 			.children = eamt_ops,
 		}, {
 			.label = "blacklist4", /* Deprecated */
-			.xt = XT_SIIT,
 			.children = blacklist4_ops,
 		}, {
 			.label = "denylist4",
-			.xt = XT_SIIT,
 			.children = denylist4_ops,
 		}, {
-			.label = "pool4",
-			.xt = XT_NAT64,
-			.children = pool4_ops,
-		}, {
-			.label = "bib",
-			.xt = XT_NAT64,
-			.children = bib_ops,
-		}, {
-			.label = "session",
-			.xt = XT_NAT64,
-			.children = session_ops,
-		}, {
 			.label = "file",
-			.xt = XT_ANY,
 			.children = file_ops,
-		}, {
-			.label = "joold",
-			.xt = XT_NAT64,
-			.children = joold_ops,
 		}, {
 			/* See files jool.bash and jool_siit.bash. */
 			.label = "autocomplete",
-			.xt = XT_ANY,
 			.hidden = true,
 			.handler  = handle_autocomplete,
 		},
@@ -365,9 +248,6 @@ static struct cmd_option *find_matches(struct cmd_option *options, char *prefix)
 		return NULL;
 
 	for (option = options; option->label; option++) {
-		if (!(xt_get() & option->xt))
-			continue;
-
 		if (option->hidden) {
 			if (strcmp(option->label, prefix) == 0)
 				return option;

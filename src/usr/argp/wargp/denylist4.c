@@ -4,7 +4,6 @@
 #include "usr/argp/requirements.h"
 #include "usr/argp/userspace-types.h"
 #include "usr/argp/wargp.h"
-#include "usr/argp/xlator_type.h"
 #include "usr/nl/core.h"
 #include "usr/nl/denylist4.h"
 #include "usr/util/str_utils.h"
@@ -48,7 +47,7 @@ int handle_denylist4_display(char *iname, int argc, char **argv, void const *arg
 	if (result.error)
 		return result.error;
 
-	result = joolnl_setup(&sk, xt_get());
+	result = joolnl_setup(&sk);
 	if (result.error)
 		return pr_result(&result);
 
@@ -121,7 +120,7 @@ int handle_denylist4_add(char *iname, int argc, char **argv, void const *arg)
 		return requirement_print(reqs);
 	}
 
-	result = joolnl_setup(&sk, xt_get());
+	result = joolnl_setup(&sk);
 	if (result.error)
 		return pr_result(&result);
 
@@ -175,7 +174,7 @@ int handle_denylist4_remove(char *iname, int argc, char **argv, void const *arg)
 		return requirement_print(reqs);
 	}
 
-	result = joolnl_setup(&sk, xt_get());
+	result = joolnl_setup(&sk);
 	if (result.error)
 		return pr_result(&result);
 
@@ -205,7 +204,7 @@ int handle_denylist4_flush(char *iname, int argc, char **argv, void const *arg)
 	if (result.error)
 		return result.error;
 
-	result = joolnl_setup(&sk, xt_get());
+	result = joolnl_setup(&sk);
 	if (result.error)
 		return pr_result(&result);
 

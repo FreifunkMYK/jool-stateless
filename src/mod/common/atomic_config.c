@@ -9,9 +9,6 @@
 #include "mod/common/nl/nl_common.h"
 #include "mod/common/db/eam.h"
 #include "mod/common/db/denylist4.h"
-#include "mod/common/joold.h"
-#include "mod/common/db/pool4/db.h"
-#include "mod/common/db/bib/db.h"
 
 /**
  * This represents the new configuration the user wants to apply to a certain
@@ -133,8 +130,7 @@ static int get_candidate(char *iname, struct config_candidate **result)
 	return -ESRCH;
 }
 
-static int handle_init(struct config_candidate **out, struct nlattr *attr,
-		char *iname, xlator_type xt)
+static int handle_init(struct config_candidate **out, char *iname)
 {
 	struct config_candidate *candidate;
 	struct net *ns;
@@ -154,8 +150,7 @@ static int handle_init(struct config_candidate **out, struct nlattr *attr,
 		goto end;
 	}
 
-	error = xlator_init(&candidate->xlator, ns, iname, nla_get_u8(attr) | xt,
-			NULL);
+	error = xlator_init(&candidate->xlator, ns, iname, NULL);
 	if (error) {
 		wkfree(struct config_candidate, candidate);
 		goto end;
@@ -175,7 +170,6 @@ static int handle_global(struct config_candidate *new, struct nlattr *attr,
 {
 	LOG_DEBUG("Handling atomic global attribute.");
 	return global_update(&new->xlator.globals,
-			xlator_flags2xt(new->xlator.flags),
 			!!(flags & JOOLNLHDR_FLAGS_FORCE), attr);
 }
 
@@ -188,11 +182,6 @@ static int handle_eamt(struct config_candidate *new, struct nlattr *root,
 	int error;
 
 	LOG_DEBUG("Handling atomic EAMT attribute.");
-
-	if (xlator_is_nat64(&new->xlator)) {
-		log_err("Stateful NAT64 doesn't have an EAMT.");
-		return -EINVAL;
-	}
 
 	nla_for_each_nested(attr, root, rem) {
 		if (nla_type(attr) != JNLAL_ENTRY)
@@ -218,11 +207,6 @@ static int handle_denylist4(struct config_candidate *new, struct nlattr *root,
 
 	LOG_DEBUG("Handling atomic denylist4 attribute.");
 
-	if (xlator_is_nat64(&new->xlator)) {
-		log_err("Stateful NAT64 doesn't have denylist4.");
-		return -EINVAL;
-	}
-
 	nla_for_each_nested(attr, root, rem) {
 		if (nla_type(attr) != JNLAL_ENTRY)
 			continue; /* ? */
@@ -230,62 +214,6 @@ static int handle_denylist4(struct config_candidate *new, struct nlattr *root,
 		if (error)
 			return error;
 		error = denylist4_add(new->xlator.siit.denylist4, &entry, force);
-		if (error)
-			return error;
-	}
-
-	return 0;
-}
-
-static int handle_pool4(struct config_candidate *new, struct nlattr *root)
-{
-	struct nlattr *attr;
-	struct pool4_entry entry;
-	int rem;
-	int error;
-
-	LOG_DEBUG("Handling atomic pool4 attribute.");
-
-	if (xlator_is_siit(&new->xlator)) {
-		log_err("SIIT doesn't have pool4.");
-		return -EINVAL;
-	}
-
-	nla_for_each_nested(attr, root, rem) {
-		if (nla_type(attr) != JNLAL_ENTRY)
-			continue; /* ? */
-		error = jnla_get_pool4(attr, "pool4 entry", &entry);
-		if (error)
-			return error;
-		error = pool4db_add(new->xlator.nat64.pool4, &entry);
-		if (error)
-			return error;
-	}
-
-	return 0;
-}
-
-static int handle_bib(struct config_candidate *new, struct nlattr *root)
-{
-	struct nlattr *attr;
-	struct bib_entry entry;
-	int rem;
-	int error;
-
-	LOG_DEBUG("Handling atomic BIB attribute.");
-
-	if (xlator_is_siit(&new->xlator)) {
-		log_err("SIIT doesn't have BIBs.");
-		return -EINVAL;
-	}
-
-	nla_for_each_nested(attr, root, rem) {
-		if (nla_type(attr) != JNLAL_ENTRY)
-			continue; /* ? */
-		error = jnla_get_bib(attr, "BIB entry", &entry);
-		if (error)
-			return error;
-		error = bib_add_static(&new->xlator, &entry);
 		if (error)
 			return error;
 	}
@@ -326,7 +254,7 @@ int atomconfig_add(struct sk_buff *skb, struct genl_info *info)
 	mutex_lock(&lock);
 
 	error = info->attrs[JNLAR_ATOMIC_INIT]
-			? handle_init(&candidate, info->attrs[JNLAR_ATOMIC_INIT], jhdr->iname, jhdr->xt)
+			? handle_init(&candidate, jhdr->iname)
 			: get_candidate(jhdr->iname, &candidate);
 	if (error)
 		goto end;
@@ -343,16 +271,6 @@ int atomconfig_add(struct sk_buff *skb, struct genl_info *info)
 	}
 	if (info->attrs[JNLAR_EAMT_ENTRIES]) {
 		error = handle_eamt(candidate, info->attrs[JNLAR_EAMT_ENTRIES], jhdr->flags & JOOLNLHDR_FLAGS_FORCE);
-		if (error)
-			goto revert;
-	}
-	if (info->attrs[JNLAR_POOL4_ENTRIES]) {
-		error = handle_pool4(candidate, info->attrs[JNLAR_POOL4_ENTRIES]);
-		if (error)
-			goto revert;
-	}
-	if (info->attrs[JNLAR_BIB_ENTRIES]) {
-		error = handle_bib(candidate, info->attrs[JNLAR_BIB_ENTRIES]);
 		if (error)
 			goto revert;
 	}

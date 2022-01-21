@@ -18,44 +18,6 @@ static __u8 xlat_nexthdr(__u8 protocol)
 	return (protocol == IPPROTO_ICMP) ? NEXTHDR_ICMP : protocol;
 }
 
-static int generate_saddr6_nat64(struct xlation *state)
-{
-	struct jool_globals *cfg;
-	struct in_addr tmp;
-
-	cfg = &state->jool.globals;
-	if (cfg->nat64.src_icmp6errs_better && pkt_is_icmp4_error(&state->in)) {
-		/* Issue #132 behaviour. */
-		tmp.s_addr = pkt_ip4_hdr(&state->in)->saddr;
-		return __rfc6052_4to6(&cfg->pool6.prefix, &tmp,
-				&state->flowx.v6.flowi.saddr);
-	}
-
-	/* RFC 6146 behaviour. */
-	state->flowx.v6.flowi.saddr = state->out.tuple.src.addr6.l3;
-	return 0;
-}
-
-static verdict xlat46_external_addresses(struct xlation *state)
-{
-	switch (xlator_get_type(&state->jool)) {
-	case XT_NAT64:
-		if (generate_saddr6_nat64(state))
-			return drop(state, JSTAT46_SRC);
-		state->flowx.v6.flowi.daddr = state->out.tuple.dst.addr6.l3;
-		return VERDICT_CONTINUE;
-
-	case XT_SIIT:
-		return translate_addrs46_siit(state,
-				&state->flowx.v6.flowi.saddr,
-				&state->flowx.v6.flowi.daddr);
-	}
-
-	WARN(1, "xlator type is not SIIT nor NAT64: %u",
-			xlator_get_type(&state->jool));
-	return drop(state, JSTAT_UNKNOWN);
-}
-
 static verdict xlat46_internal_addresses(struct xlation *state)
 {
 	struct bkp_skb_tuple bkp;
@@ -64,27 +26,15 @@ static verdict xlat46_internal_addresses(struct xlation *state)
 	if (pkt_is_inner(&state->in))
 		return VERDICT_CONTINUE; /* Called from xlat46_icmp_type() */
 
-	switch (xlator_get_type(&state->jool)) {
-	case XT_NAT64:
-		state->flowx.v6.inner_src = state->out.tuple.dst.addr6.l3;
-		state->flowx.v6.inner_dst = state->out.tuple.src.addr6.l3;
-		return VERDICT_CONTINUE;
-
-	case XT_SIIT:
-		result = become_inner_packet(state, &bkp, false);
-		if (result != VERDICT_CONTINUE)
-			return result;
-		log_debug(state, "Translating internal addresses...");
-		result = translate_addrs46_siit(state,
-				&state->flowx.v6.inner_src,
-				&state->flowx.v6.inner_dst);
-		restore_outer_packet(state, &bkp, false);
+	result = become_inner_packet(state, &bkp, false);
+	if (result != VERDICT_CONTINUE)
 		return result;
-	}
-
-	WARN(1, "xlator type is not SIIT nor NAT64: %u",
-			xlator_get_type(&state->jool));
-	return drop(state, JSTAT_UNKNOWN);
+	log_debug(state, "Translating internal addresses...");
+	result = translate_addrs46_siit(state,
+			&state->flowx.v6.inner_src,
+			&state->flowx.v6.inner_dst);
+	restore_outer_packet(state, &bkp, false);
+	return result;
 }
 
 static verdict xlat46_tcp_ports(struct xlation *state)
@@ -93,16 +43,9 @@ static verdict xlat46_tcp_ports(struct xlation *state)
 	struct tcphdr const *hdr;
 
 	flow6 = &state->flowx.v6.flowi;
-	switch (xlator_get_type(&state->jool)) {
-	case XT_NAT64:
-		flow6->fl6_sport = cpu_to_be16(state->out.tuple.src.addr6.l4);
-		flow6->fl6_dport = cpu_to_be16(state->out.tuple.dst.addr6.l4);
-		break;
-	case XT_SIIT:
-		hdr = pkt_tcp_hdr(&state->in);
-		flow6->fl6_sport = hdr->source;
-		flow6->fl6_dport = hdr->dest;
-	}
+	hdr = pkt_tcp_hdr(&state->in);
+	flow6->fl6_sport = hdr->source;
+	flow6->fl6_dport = hdr->dest;
 
 	return VERDICT_CONTINUE;
 }
@@ -113,16 +56,9 @@ static verdict xlat46_udp_ports(struct xlation *state)
 	struct udphdr const *udp;
 
 	flow6 = &state->flowx.v6.flowi;
-	switch (xlator_get_type(&state->jool)) {
-	case XT_NAT64:
-		flow6->fl6_sport = cpu_to_be16(state->out.tuple.src.addr6.l4);
-		flow6->fl6_dport = cpu_to_be16(state->out.tuple.dst.addr6.l4);
-		break;
-	case XT_SIIT:
-		udp = pkt_udp_hdr(&state->in);
-		flow6->fl6_sport = udp->source;
-		flow6->fl6_dport = udp->dest;
-	}
+	udp = pkt_udp_hdr(&state->in);
+	flow6->fl6_sport = udp->source;
+	flow6->fl6_dport = udp->dest;
 
 	return VERDICT_CONTINUE;
 }
@@ -222,7 +158,9 @@ static verdict compute_flowix46(struct xlation *state)
 	flow6->flowi6_proto = xlat_nexthdr(pkt_ip4_hdr(&state->in)->protocol);
 	flow6->flowi6_flags = FLOWI_FLAG_ANYSRC;
 
-	result = xlat46_external_addresses(state);
+	result = translate_addrs46_siit(state,
+			&state->flowx.v6.flowi.saddr,
+			&state->flowx.v6.flowi.daddr);
 	if (result != VERDICT_CONTINUE)
 		return result;
 
@@ -254,9 +192,6 @@ static verdict predict_route46(struct xlation *state)
 		return untranslatable(state, JSTAT_FAILED_ROUTES);
 
 	if (ipv6_addr_any(&flow6->saddr)) { /* empty pool6791v6 */
-		if (WARN(!xlator_is_siit(&state->jool),
-			 "Zero source address on not SIIT!"))
-			goto panic;
 		if (WARN(!is_icmp4_error(pkt_icmp4_hdr(&state->in)->type),
 			 "Zero source on not ICMP error!"))
 			goto panic;
@@ -1339,10 +1274,7 @@ static verdict ttp46_icmp(struct xlation *state)
 	switch (icmpv4_hdr->type) {
 	case ICMP_ECHO:
 	case ICMP_ECHOREPLY:
-		icmpv6_hdr->icmp6_identifier =
-				xlation_is_nat64(state)
-				? cpu_to_be16(state->out.tuple.icmp6_id)
-				: icmpv4_hdr->un.echo.id;
+		icmpv6_hdr->icmp6_identifier = icmpv4_hdr->un.echo.id;
 		icmpv6_hdr->icmp6_sequence = icmpv4_hdr->un.echo.sequence;
 		update_icmp6_csum(state);
 		return VERDICT_CONTINUE;
@@ -1368,20 +1300,6 @@ static verdict ttp46_icmp(struct xlation *state)
 	WARN(1, "ICMPv6 type %u was unhandled by the switch above.",
 			icmpv6_hdr->icmp6_type);
 	return drop(state, JSTAT_UNKNOWN);
-}
-
-static __be16 get_src_port46(struct xlation *state)
-{
-	return pkt_is_inner(&state->out)
-			? cpu_to_be16(state->out.tuple.dst.addr6.l4)
-			: cpu_to_be16(state->out.tuple.src.addr6.l4);
-}
-
-static __be16 get_dst_port46(struct xlation *state)
-{
-	return pkt_is_inner(&state->out)
-			? cpu_to_be16(state->out.tuple.src.addr6.l4)
-			: cpu_to_be16(state->out.tuple.dst.addr6.l4);
 }
 
 /**
@@ -1438,9 +1356,6 @@ static bool can_compute_csum(struct xlation *state)
 	struct iphdr *hdr4;
 	struct udphdr *hdr_udp;
 	bool amend_csum0;
-
-	if (xlation_is_nat64(state))
-		return true;
 
 	/*
 	 * RFC 7915#4.5:
@@ -1525,10 +1440,6 @@ static verdict ttp46_tcp(struct xlation *state)
 
 	/* Header */
 	memcpy(tcp_out, tcp_in, pkt_l4hdr_len(in));
-	if (xlation_is_nat64(state)) {
-		tcp_out->source = get_src_port46(state);
-		tcp_out->dest = get_dst_port46(state);
-	}
 
 	/* Header.checksum */
 	if (in->skb->ip_summed != CHECKSUM_PARTIAL) {
@@ -1559,10 +1470,6 @@ static verdict ttp46_udp(struct xlation *state)
 
 	/* Header */
 	memcpy(udp_out, udp_in, pkt_l4hdr_len(in));
-	if (xlation_is_nat64(state)) {
-		udp_out->source = get_src_port46(state);
-		udp_out->dest = get_dst_port46(state);
-	}
 
 	/* Header.checksum */
 	if (udp_in->check != 0) {

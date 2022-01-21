@@ -24,31 +24,6 @@
 /** Maximum storable value on a __u32. */
 #define MAX_U32 0xFFFFFFFFU
 
-typedef unsigned int xlator_flags;
-typedef unsigned int xlator_type; /** Bitwise or'd XT_* constants below. */
-typedef unsigned int xlator_framework; /** Bitwise or'd XF_* constants below. */
-
-#define XT_SIIT (1 << 0)
-#define XT_NAT64 (1 << 1)
-#define XF_NETFILTER (1 << 2)
-#define XF_IPTABLES (1 << 3)
-
-#define XT_ANY (XT_SIIT | XT_NAT64)
-#define XF_ANY (XF_NETFILTER | XF_IPTABLES)
-
-int xf_validate(xlator_framework xf);
-int xt_validate(xlator_type xt);
-
-xlator_type xlator_flags2xt(xlator_flags flags);
-xlator_framework xlator_flags2xf(xlator_flags flags);
-
-#define XT_VALIDATE_ERRMSG \
-	"The instance type must be either SIIT or NAT64."
-#define XF_VALIDATE_ERRMSG \
-	"The instance framework must be either Netfilter or iptables."
-
-char const *xt2str(xlator_type xt);
-
 /*
  * This includes the null chara.
  *
@@ -183,18 +158,6 @@ struct port_range {
 struct ipv4_range {
 	struct ipv4_prefix prefix;
 	struct port_range ports;
-};
-
-struct pool4_entry {
-	__u32 mark;
-	/**
-	 * BTW: This field is only meaningful if flags has ITERATIONS_SET,
-	 * !ITERATIONS_AUTO and !ITERATIONS_INFINITE.
-	 */
-	__u32 iterations;
-	__u8 flags;
-	__u8 proto;
-	struct ipv4_range range;
 };
 
 /*

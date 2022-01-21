@@ -20,9 +20,6 @@ static int parse_instance(struct nlattr *root, struct instance_entry_usr *entry)
 	error = jnla_get_u32(attrs[JNLAIE_NS], "namespace", &entry->ns);
 	if (error)
 		return error;
-	error = jnla_get_u8(attrs[JNLAIE_XF], "framework", &entry->xf);
-	if (error)
-		return error;
 	return jnla_get_str(attrs[JNLAIE_INAME], "instance name",
 			INAME_MAX_SIZE, entry->iname);
 }
@@ -38,9 +35,6 @@ static int serialize_instance(struct xlator *entry, void *arg)
 		return 1;
 
 	error = nla_put_u32(skb, JNLAIE_NS, ((__u64)entry->ns) & 0xFFFFFFFF);
-	if (error)
-		goto cancel;
-	error = nla_put_u8(skb, JNLAIE_XF, xlator_flags2xf(entry->flags));
 	if (error)
 		goto cancel;
 	error = nla_put_string(skb, JNLAIE_INAME, entry->iname);
@@ -63,7 +57,7 @@ int handle_instance_foreach(struct sk_buff *skb, struct genl_info *info)
 
 	LOG_DEBUG("Sending instance table to userspace.");
 
-	error = request_handle_start(info, XT_ANY, NULL, true);
+	error = request_handle_start(info, NULL, true);
 	if (error)
 		goto fail;
 
@@ -73,15 +67,14 @@ int handle_instance_foreach(struct sk_buff *skb, struct genl_info *info)
 		if (error)
 			goto revert_start;
 		offset_ptr = &offset;
-		LOG_DEBUG("Offset: [%x %s %u]", offset.ns, offset.iname,
-				offset.xf);
+		LOG_DEBUG("Offset: [%x %s]", offset.ns, offset.iname);
 	}
 
 	error = jresponse_init(&response, info);
 	if (error)
 		goto revert_start;
 
-	error = xlator_foreach(get_jool_hdr(info)->xt, serialize_instance,
+	error = xlator_foreach(serialize_instance,
 			response.skb, offset_ptr);
 
 	error = jresponse_send_array(NULL, &response, error);
@@ -100,17 +93,15 @@ fail:
 int handle_instance_add(struct sk_buff *skb, struct genl_info *info)
 {
 	static struct nla_policy add_policy[JNLAIA_COUNT] = {
-		[JNLAIA_XF] = { .type = NLA_U8 },
 		[JNLAIA_POOL6] = { .type = NLA_NESTED, },
 	};
 	struct nlattr *attrs[JNLAIA_COUNT];
 	struct config_prefix6 pool6;
-	__u8 xf;
 	int error;
 
 	LOG_DEBUG("Adding Jool instance.");
 
-	error = request_handle_start(info, XT_ANY, NULL, true);
+	error = request_handle_start(info, NULL, true);
 	if (error)
 		goto abort;
 
@@ -125,9 +116,6 @@ int handle_instance_add(struct sk_buff *skb, struct genl_info *info)
 	if (error)
 		return error;
 
-	error = jnla_get_u8(attrs[JNLAIA_XF], "framework", &xf);
-	if (error)
-		goto revert_start;
 	pool6.set = false;
 	if (attrs[JNLAIA_POOL6]) {
 		error = jnla_get_prefix6_optional(attrs[JNLAIA_POOL6], "pool6",
@@ -137,7 +125,6 @@ int handle_instance_add(struct sk_buff *skb, struct genl_info *info)
 	}
 
 	return jresponse_send_simple(NULL, info, xlator_add(
-		xf | get_jool_hdr(info)->xt,
 		get_jool_hdr(info)->iname,
 		pool6.set ? &pool6.prefix : NULL,
 		NULL
@@ -156,7 +143,7 @@ int handle_instance_hello(struct sk_buff *skb, struct genl_info *info)
 
 	LOG_DEBUG("Handling instance Hello.");
 
-	error = request_handle_start(info, XT_ANY, NULL, true);
+	error = request_handle_start(info, NULL, true);
 	if (error)
 		goto fail;
 
@@ -164,8 +151,7 @@ int handle_instance_hello(struct sk_buff *skb, struct genl_info *info)
 	if (error)
 		goto revert_start;
 
-	error = xlator_find_current(get_jool_hdr(info)->iname,
-			XF_ANY | get_jool_hdr(info)->xt, NULL);
+	error = xlator_find_current(get_jool_hdr(info)->iname, NULL);
 	switch (error) {
 	case 0:
 		error = nla_put_u8(response.skb, JNLAIS_STATUS, IHS_ALIVE);
@@ -199,9 +185,9 @@ int handle_instance_rm(struct sk_buff *skb, struct genl_info *info)
 
 	LOG_DEBUG("Removing Jool instance.");
 
-	error = request_handle_start(info, XT_ANY, NULL, true);
+	error = request_handle_start(info, NULL, true);
 	if (!error)
-		error = xlator_rm(get_jool_hdr(info)->xt, get_jool_hdr(info)->iname);
+		error = xlator_rm(get_jool_hdr(info)->iname);
 	request_handle_end(NULL);
 
 	return jresponse_send_simple(NULL, info, error);
@@ -213,9 +199,9 @@ int handle_instance_flush(struct sk_buff *skb, struct genl_info *info)
 
 	LOG_DEBUG("Flushing all instances from this namespace.");
 
-	error = request_handle_start(info, XT_ANY, NULL, true);
+	error = request_handle_start(info, NULL, true);
 	if (!error)
-		error = xlator_flush(get_jool_hdr(info)->xt);
+		error = xlator_flush();
 	request_handle_end(NULL);
 
 	return jresponse_send_simple(NULL, info, error);

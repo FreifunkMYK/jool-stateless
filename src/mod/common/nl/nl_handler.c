@@ -10,16 +10,12 @@
 #include "mod/common/xlator.h"
 #include "mod/common/nl/address.h"
 #include "mod/common/nl/atomic_config.h"
-#include "mod/common/nl/bib.h"
 #include "mod/common/nl/denylist4.h"
 #include "mod/common/nl/eam.h"
 #include "mod/common/nl/global.h"
 #include "mod/common/nl/instance.h"
-#include "mod/common/nl/joold.h"
 #include "mod/common/nl/nl_common.h"
 #include "mod/common/nl/nl_core.h"
-#include "mod/common/nl/pool4.h"
-#include "mod/common/nl/session.h"
 #include "mod/common/nl/stats.h"
 
 #if LINUX_VERSION_AT_LEAST(0, 0, 0, 7, 1)
@@ -46,14 +42,11 @@ static struct nla_policy const jool_policy[JNLAR_COUNT] = {
 	[JNLAR_GLOBALS] = { .type = NLA_NESTED },
 	[JNLAR_BL4_ENTRIES] = { .type = NLA_NESTED },
 	[JNLAR_EAMT_ENTRIES] = { .type = NLA_NESTED },
-	[JNLAR_POOL4_ENTRIES] = { .type = NLA_NESTED },
-	[JNLAR_BIB_ENTRIES] = { .type = NLA_NESTED },
-	[JNLAR_SESSION_ENTRIES] = { .type = NLA_NESTED },
 	[JNLAR_OFFSET] = { .type = NLA_NESTED },
 	[JNLAR_OFFSET_U8] = { .type = NLA_U8 },
 	[JNLAR_OPERAND] = { .type = NLA_NESTED },
 	[JNLAR_PROTO] = { .type = NLA_U8 },
-	[JNLAR_ATOMIC_INIT] = { .type = NLA_U8 },
+	[JNLAR_ATOMIC_INIT] = { .type = NLA_BINARY, .len = 0 },
 	[JNLAR_ATOMIC_END] = { .type = NLA_BINARY, .len = 0 },
 };
 
@@ -135,54 +128,6 @@ static _CONST struct genl_ops ops[] = {
 	}, {
 		.cmd = JNLOP_BL4_FLUSH,
 		.doit = handle_denylist4_flush,
-		JOOL_POLICY
-	}, {
-		.cmd = JNLOP_POOL4_FOREACH,
-		.doit = handle_pool4_foreach,
-		JOOL_POLICY
-	}, {
-		.cmd = JNLOP_POOL4_ADD,
-		.doit = handle_pool4_add,
-		JOOL_POLICY
-	}, {
-		.cmd = JNLOP_POOL4_RM,
-		.doit = handle_pool4_rm,
-		JOOL_POLICY
-	}, {
-		.cmd = JNLOP_POOL4_FLUSH,
-		.doit = handle_pool4_flush,
-		JOOL_POLICY
-	}, {
-		.cmd = JNLOP_BIB_FOREACH,
-		.doit = handle_bib_foreach,
-		JOOL_POLICY
-	}, {
-		.cmd = JNLOP_BIB_ADD,
-		.doit = handle_bib_add,
-		JOOL_POLICY
-	}, {
-		.cmd = JNLOP_BIB_RM,
-		.doit = handle_bib_rm,
-		JOOL_POLICY
-	}, {
-		.cmd = JNLOP_SESSION_FOREACH,
-		.doit = handle_session_foreach,
-		JOOL_POLICY
-	}, {
-		.cmd = JNLOP_FILE_HANDLE,
-		.doit = handle_atomconfig_request,
-		JOOL_POLICY
-	}, {
-		.cmd = JNLOP_JOOLD_ADD,
-		.doit = handle_joold_add,
-		JOOL_POLICY
-	}, {
-		.cmd = JNLOP_JOOLD_ADVERTISE,
-		.doit = handle_joold_advertise,
-		JOOL_POLICY
-	}, {
-		.cmd = JNLOP_JOOLD_ACK,
-		.doit = handle_joold_ack,
 		JOOL_POLICY
 	}
 };

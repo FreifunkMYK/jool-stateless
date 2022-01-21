@@ -20,7 +20,6 @@ enum joolnl_attr_global joolnl_global_meta_id(
 	struct joolnl_global_meta const *meta
 );
 char const *joolnl_global_meta_name(struct joolnl_global_meta const *meta);
-xlator_type joolnl_global_meta_xt(struct joolnl_global_meta const *meta);
 char const *joolnl_global_meta_values(struct joolnl_global_meta const *meta);
 
 #define joolnl_global_foreach_meta(pos) 				\

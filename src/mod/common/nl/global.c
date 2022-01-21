@@ -21,7 +21,7 @@ int handle_global_foreach(struct sk_buff *skb, struct genl_info *info)
 	enum joolnl_attr_global offset;
 	int error;
 
-	error = request_handle_start(info, XT_ANY, &jool, true);
+	error = request_handle_start(info, &jool, true);
 	if (error)
 		return jresponse_send_simple(NULL, info, error);
 
@@ -37,8 +37,7 @@ int handle_global_foreach(struct sk_buff *skb, struct genl_info *info)
 		__log_debug(&jool, "Offset: [%u]", offset);
 	}
 
-	error = globals_foreach(&jool.globals, xlator_get_type(&jool),
-			serialize_global, response.skb, offset);
+	error = globals_foreach(&jool.globals, serialize_global, response.skb, offset);
 
 	error = jresponse_send_array(&jool, &response, error);
 	if (error)
@@ -101,7 +100,7 @@ int handle_global_update(struct sk_buff *skb, struct genl_info *info)
 	 * So let's STFU and do that.
 	 */
 
-	error = request_handle_start(info, XT_ANY, &jool, true);
+	error = request_handle_start(info, &jool, true);
 	if (error)
 		return jresponse_send_simple(NULL, info, error);
 
@@ -113,7 +112,7 @@ int handle_global_update(struct sk_buff *skb, struct genl_info *info)
 		goto revert_start;
 	}
 
-	error = global_update(&jool.globals, get_jool_hdr(info)->xt,
+	error = global_update(&jool.globals,
 			get_jool_hdr(info)->flags & JOOLNLHDR_FLAGS_FORCE,
 			info->attrs[JNLAR_GLOBALS]);
 	if (error)
@@ -131,8 +130,7 @@ revert_start:
 	return error;
 }
 
-int global_update(struct jool_globals *cfg, xlator_type xt, bool force,
-		struct nlattr *root)
+int global_update(struct jool_globals *cfg, bool force, struct nlattr *root)
 {
 	const struct nla_policy *policy;
 	struct nlattr *attrs[JNLAG_COUNT];
@@ -140,25 +138,13 @@ int global_update(struct jool_globals *cfg, xlator_type xt, bool force,
 	enum joolnl_attr_global id;
 	int error;
 
-	switch (xt) {
-	case XT_SIIT:
-		policy = siit_globals_policy;
-		break;
-	case XT_NAT64:
-		policy = nat64_globals_policy;
-		break;
-	default:
-		log_err(XT_VALIDATE_ERRMSG);
-		return -EINVAL;
-	}
+	policy = siit_globals_policy;
 
 	error = jnla_parse_nested(attrs, JNLAG_MAX, root, policy, "Globals Container");
 	if (error)
 		return error;
 
 	joolnl_global_foreach_meta(meta) {
-		if (!(joolnl_global_meta_xt(meta) & xt))
-			continue;
 		id = joolnl_global_meta_id(meta);
 		if (!attrs[id])
 			continue;

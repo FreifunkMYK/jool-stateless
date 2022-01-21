@@ -1,7 +1,6 @@
 #include "mod/common/init.h"
 
 #include <linux/module.h>
-#include "common/iptables.h"
 #include "mod/common/kernel_hook.h"
 #include "mod/common/log.h"
 #include "mod/common/xlator.h"
@@ -11,36 +10,14 @@ MODULE_AUTHOR("NIC-ITESM");
 MODULE_DESCRIPTION("Stateless IP/ICMP Translation (RFC 7915)");
 MODULE_VERSION(JOOL_VERSION_STR);
 
-static int iptables_error;
-
-static struct xt_target targets[] = {
-	{
-		.name       = IPTABLES_SIIT_MODULE_NAME,
-		.revision   = 0,
-		.family     = NFPROTO_IPV6,
-		.target     = target_ipv6,
-		.checkentry = target_checkentry,
-		.targetsize = XT_ALIGN(sizeof(struct target_info)),
-		.me         = THIS_MODULE,
-	}, {
-		.name       = IPTABLES_SIIT_MODULE_NAME,
-		.revision   = 0,
-		.family     = NFPROTO_IPV4,
-		.target     = target_ipv4,
-		.checkentry = target_checkentry,
-		.targetsize = XT_ALIGN(sizeof(struct target_info)),
-		.me         = THIS_MODULE,
-	},
-};
-
 static void flush_net(struct net *ns)
 {
-	jool_xlator_flush_net(ns, XT_SIIT);
+	jool_xlator_flush_net(ns);
 }
 
 static void flush_batch(struct list_head *net_exit_list)
 {
-	jool_xlator_flush_batch(net_exit_list, XT_SIIT);
+	jool_xlator_flush_batch(net_exit_list);
 }
 
 /** Namespace-aware network operation registration object */
@@ -60,18 +37,9 @@ static int __init siit_init(void)
 	if (error)
 		return error;
 
-	iptables_error = xt_register_targets(targets, ARRAY_SIZE(targets));
-	if (iptables_error) {
-		log_warn("Error code %d while trying to register the iptables targets.\n"
-				"iptables SIIT Jool will not be available.",
-				iptables_error);
-	}
-
 	/* SIIT instances can now function properly; unlock them. */
 	error = jool_siit_get();
 	if (error) {
-		if (!iptables_error)
-			xt_unregister_targets(targets, ARRAY_SIZE(targets));
 		unregister_pernet_subsys(&joolns_ops);
 		return error;
 	}
@@ -83,8 +51,6 @@ static int __init siit_init(void)
 static void __exit siit_exit(void)
 {
 	jool_siit_put();
-	if (!iptables_error)
-		xt_unregister_targets(targets, ARRAY_SIZE(targets));
 	unregister_pernet_subsys(&joolns_ops);
 	pr_info("SIIT Jool v" JOOL_VERSION_STR " module removed.\n");
 }

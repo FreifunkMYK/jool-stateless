@@ -26,25 +26,6 @@ static int validate_magic(struct joolnlhdr *hdr)
 	return -EINVAL;
 }
 
-static int validate_stateness(struct joolnlhdr *hdr)
-{
-	switch (hdr->xt) {
-	case XT_SIIT:
-		if (is_siit_enabled())
-			return 0;
-		log_err("SIIT Jool has not been modprobed. (Try `modprobe jool_siit`)");
-		return -EINVAL;
-	case XT_NAT64:
-		if (is_nat64_enabled())
-			return 0;
-		log_err("NAT64 Jool has not been modprobed. (Try `modprobe jool`)");
-		return -EINVAL;
-	}
-
-	log_err(XT_VALIDATE_ERRMSG);
-	return -EINVAL;
-}
-
 static int validate_version(struct joolnlhdr *hdr)
 {
 	__u32 hdr_version = ntohl(hdr->version);
@@ -65,8 +46,7 @@ static int validate_version(struct joolnlhdr *hdr)
 	return -EINVAL;
 }
 
-int request_handle_start(struct genl_info *info, xlator_type xt,
-		struct xlator *jool, bool require_net_admin)
+int request_handle_start(struct genl_info *info, struct xlator *jool, bool require_net_admin)
 {
 	struct joolnlhdr *hdr;
 	int error;
@@ -89,20 +69,12 @@ int request_handle_start(struct genl_info *info, xlator_type xt,
 	error = validate_magic(hdr);
 	if (error)
 		return error;
-	error = validate_stateness(hdr);
-	if (error)
-		return error;
 	error = validate_version(hdr);
 	if (error)
 		return error;
 
-	if (!(hdr->xt & xt)) {
-		log_err("Command unsupported by %s translators.", xt2str(hdr->xt));
-		return error;
-	}
-
 	if (jool) {
-		error = xlator_find_current(get_iname(info), XF_ANY | hdr->xt, jool);
+		error = xlator_find_current(get_iname(info), jool);
 		if (error == -ESRCH)
 			log_err("This namespace lacks an instance named '%s'.", get_iname(info));
 		if (error)

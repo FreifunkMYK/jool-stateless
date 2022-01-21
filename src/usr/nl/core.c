@@ -24,7 +24,6 @@
 
 
 struct response_cb {
-	xlator_type xt;
 	joolnl_response_cb cb;
 	void *arg;
 	struct jool_result result;
@@ -59,7 +58,6 @@ struct jool_result joolnl_alloc_msg(struct joolnl_socket *socket,
 	memset(hdr, 0, sizeof(*hdr));
 	memmove(hdr->magic, JOOLNL_HDR_MAGIC, JOOLNL_HDR_MAGIC_LEN);
 	hdr->version = htonl(xlat_version());
-	hdr->xt = socket->xt;
 	hdr->flags = flags;
 	strcpy(hdr->iname, iname ? iname : "default");
 
@@ -98,20 +96,7 @@ static struct jool_result validate_version(struct joolnlhdr *hdr)
 	);
 }
 
-static struct jool_result validate_stateness(struct joolnlhdr *hdr,
-		xlator_type xt)
-{
-	if (hdr->xt & xt)
-		return result_success();
-
-	return result_from_error(
-		-EINVAL,
-		"Packet is meant for %s translators, but I'm a %s.",
-		xt2str(hdr->xt), xt2str(xt)
-	);
-}
-
-struct jool_result validate_joolnlhdr(struct joolnlhdr *hdr, xlator_type xt)
+struct jool_result validate_joolnlhdr(struct joolnlhdr *hdr)
 {
 	struct jool_result result;
 
@@ -128,7 +113,7 @@ struct jool_result validate_joolnlhdr(struct joolnlhdr *hdr, xlator_type xt)
 	result = validate_version(hdr);
 	if (result.error)
 		return result;
-	return validate_stateness(hdr, xt);
+	return result_success();
 }
 
 /* Returns the error contained in @response in result form. */
@@ -193,7 +178,7 @@ static int response_handler(struct nl_msg *response, void *_args)
 	}
 
 	jhdr = genlmsg_user_hdr(genlmsg_hdr(nhdr));
-	args->result = validate_joolnlhdr(jhdr, args->xt);
+	args->result = validate_joolnlhdr(jhdr);
 	if (args->result.error)
 		goto end;
 	if (jhdr->flags & JOOLNLHDR_FLAGS_ERROR) {
@@ -227,7 +212,6 @@ struct jool_result joolnl_request(struct joolnl_socket *socket,
 	struct response_cb callback;
 	int error;
 
-	callback.xt = socket->xt;
 	callback.cb = cb;
 	callback.arg = cb_arg;
 	/* Clear out JRF_INITIALIZED and error code */
@@ -277,13 +261,9 @@ struct jool_result joolnl_request(struct joolnl_socket *socket,
  * Contract: The result will contain 0 on success, -ESRCH on module likely not
  * modprobed, else -EINVAL.
  */
-struct jool_result joolnl_setup(struct joolnl_socket *socket, xlator_type xt)
+struct jool_result joolnl_setup(struct joolnl_socket *socket)
 {
 	int error;
-
-	error = xt_validate(xt);
-	if (error)
-		return result_from_error(error, XT_VALIDATE_ERRMSG);
 
 	socket->sk = nl_socket_alloc();
 	if (!socket->sk) {
@@ -314,7 +294,6 @@ struct jool_result joolnl_setup(struct joolnl_socket *socket, xlator_type xt)
 		);
 	}
 
-	socket->xt = xt;
 	socket->genl_family = genl_ctrl_resolve(socket->sk, JOOLNL_FAMILY);
 	if (socket->genl_family < 0) {
 		nl_socket_free(socket->sk);

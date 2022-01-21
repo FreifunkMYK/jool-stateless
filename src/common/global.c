@@ -69,7 +69,6 @@ struct joolnl_global_meta {
 	char const *doc;
 	char const *candidates; /* Overrides type->candidates. */
 	size_t offset;
-	xlator_type xt;
 #ifdef __KERNEL__
 	joolnl_global_nl2raw_fn nl2raw; /* Overridets type->nl2raw. */
 #else
@@ -220,70 +219,6 @@ static int nl2raw_hairpin_mode(struct nlattr *attr, void *raw, bool force)
 	return 0;
 }
 
-static int validate_timeout(const char *what, __u32 timeout, unsigned int min)
-{
-	if (timeout < min) {
-		log_err("The '%s' timeout (%u) is too small. (min: %u)", what,
-				timeout, min);
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
-static int nl2raw_ttl_udp(struct nlattr *attr, void *raw, bool force)
-{
-	__u32 ttl;
-	int error;
-
-	ttl = nla_get_u32(attr);
-	error = validate_timeout("udp", ttl, 1000 * UDP_MIN);
-	if (!error)
-		*((__u32 *)raw) = ttl;
-
-	return error;
-}
-
-static int nl2raw_ttl_tcp_est(struct nlattr *attr, void *raw, bool force)
-{
-	__u32 ttl;
-	int error;
-
-	ttl = nla_get_u32(attr);
-	error = validate_timeout("tcp-est", ttl, 1000 * TCP_EST);
-	if (!error)
-		*((__u32 *)raw) = ttl;
-
-	return error;
-}
-
-static int nl2raw_ttl_tcp_trans(struct nlattr *attr, void *raw, bool force)
-{
-	__u32 ttl;
-	int error;
-
-	ttl = nla_get_u32(attr);
-	error = validate_timeout("tcp-trans", ttl, 1000 * TCP_TRANS);
-	if (!error)
-		*((__u32 *)raw) = ttl;
-
-	return error;
-}
-
-static int nl2raw_f_args(struct nlattr *attr, void *raw, bool force)
-{
-	__u8 f_args;
-
-	f_args = nla_get_u8(attr);
-	if (f_args > 0x0Fu) {
-		log_err("f-args (%u) is out of range. (0-%u)", f_args, 0x0Fu);
-		return -EINVAL;
-	}
-
-	*((__u8 *)raw) = f_args;
-	return 0;
-}
-
 #else
 
 static void print_bool(void *value, bool csv)
@@ -305,18 +240,6 @@ static void print_u32(void *value, bool csv)
 {
 	__u32 *uvalue = value;
 	printf("%u", *uvalue);
-}
-
-static void print_timeout(void *value, bool csv)
-{
-	__u32 *uvalue = value;
-	char string[TIMEOUT_BUFLEN];
-
-	timeout2str(*uvalue, string);
-	printf("%s", string);
-
-	if (!csv)
-		printf(" (HH:MM:SS)");
 }
 
 static void print_plateaus(void *value, bool csv)
@@ -383,26 +306,6 @@ static void print_hairpin_mode(void *value, bool csv)
 	}
 
 	printf("unknown");
-}
-
-static void print_fargs(void *value, bool csv)
-{
-	__u8 uvalue = *((__u8 *)value);
-	int i;
-
-	printf("%u", uvalue);
-	if (csv)
-		return;
-
-	printf(" (0b");
-	for (i = 3; i >= 0; i--)
-		printf("%u", (uvalue >> i) & 0x1);
-	printf("): ");
-
-	printf("SrcAddr:%u ", (uvalue >> 3) & 1);
-	printf("SrcPort:%u ", (uvalue >> 2) & 1);
-	printf("DstAddr:%u ", (uvalue >> 1) & 1);
-	printf("DstPort:%u",  (uvalue >> 0) & 1);
 }
 
 static struct jool_result nl2raw_bool(struct nlattr *attr, void *raw)
@@ -501,21 +404,6 @@ static struct jool_result str2nl_u32(enum joolnl_attr_global id,
 	struct jool_result result;
 
 	result = str_to_u32(str, &value);
-	if (result.error)
-		return result;
-
-	return (nla_put_u32(msg, id, value) < 0)
-			? joolnl_err_msgsize()
-			: result_success();
-}
-
-static struct jool_result str2nl_timeout(enum joolnl_attr_global id,
-		char const *str, struct nl_msg *msg)
-{
-	__u32 value;
-	struct jool_result result;
-
-	result = str_to_timeout(str, &value);
 	if (result.error)
 		return result;
 
@@ -721,12 +609,6 @@ static struct joolnl_global_type gt_uint32 = {
 	USERSPACE_FUNCTIONS(print_u32, str2nl_u32, json2nl_u32, nl2raw_u32)
 };
 
-static struct joolnl_global_type gt_timeout = {
-	.name = "[HH:[MM:]]SS[.mmm]",
-	KERNEL_FUNCTIONS(raw2nl_u32, nl2raw_u32)
-	USERSPACE_FUNCTIONS(print_timeout, str2nl_timeout, json2nl_string, nl2raw_u32)
-};
-
 static struct joolnl_global_type gt_plateaus = {
 	.name = "List of 16-bit unsigned integers separated by commas",
 	KERNEL_FUNCTIONS(raw2nl_plateaus, nl2raw_plateaus)
@@ -759,14 +641,12 @@ static const struct joolnl_global_meta globals_metadata[] = {
 		.type = &gt_bool,
 		.doc = "Resumes or pauses the instance's translation.",
 		.offset = offsetof(struct jool_globals, enabled),
-		.xt = XT_ANY,
 	}, {
 		.id = JNLAG_POOL6,
 		.name = "pool6",
 		.type = &gt_prefix6,
 		.doc = "The IPv6 Address Pool prefix.",
 		.offset = offsetof(struct jool_globals, pool6),
-		.xt = XT_ANY,
 		.candidates = WELL_KNOWN_PREFIX,
 #ifdef __KERNEL__
 		.nl2raw = nl2raw_pool6,
@@ -777,7 +657,6 @@ static const struct joolnl_global_meta globals_metadata[] = {
 		.type = &gt_uint32,
 		.doc = "Smallest reachable IPv6 MTU.",
 		.offset = offsetof(struct jool_globals, lowest_ipv6_mtu),
-		.xt = XT_ANY,
 #ifdef __KERNEL__
 		.nl2raw = nl2raw_lowest_ipv6_mtu,
 #endif
@@ -787,42 +666,36 @@ static const struct joolnl_global_meta globals_metadata[] = {
 		.type = &gt_bool,
 		.doc = "Pour lots of debugging messages on the log?",
 		.offset = offsetof(struct jool_globals, debug),
-		.xt = XT_ANY,
 	}, {
 		.id = JNLAG_RESET_TC,
 		.name = "zeroize-traffic-class",
 		.type = &gt_bool,
 		.doc = "Always set the IPv6 header's 'Traffic Class' field as zero? Otherwise copy from IPv4 header's 'TOS'.",
 		.offset = offsetof(struct jool_globals, reset_traffic_class),
-		.xt = XT_ANY,
 	}, {
 		.id = JNLAG_RESET_TOS,
 		.name = "override-tos",
 		.type = &gt_bool,
 		.doc = "Override the IPv4 header's 'TOS' field as --tos? Otherwise copy from IPv6 header's 'Traffic Class'.",
 		.offset = offsetof(struct jool_globals, reset_tos),
-		.xt = XT_ANY,
 	}, {
 		.id = JNLAG_TOS,
 		.name = "tos",
 		.type = &gt_uint8,
 		.doc = "Value to override TOS as (only when --override-tos is ON).",
 		.offset = offsetof(struct jool_globals, new_tos),
-		.xt = XT_ANY,
 	} , {
 		.id = JNLAG_PLATEAUS,
 		.name = "mtu-plateaus",
 		.type = &gt_plateaus,
 		.doc = "Set the list of plateaus for ICMPv4 Fragmentation Neededs with MTU unset.",
 		.offset = offsetof(struct jool_globals, plateaus),
-		.xt = XT_ANY,
 	}, {
 		.id = JNLAG_COMPUTE_CSUM_ZERO,
 		.name = "amend-udp-checksum-zero",
 		.type = &gt_bool,
 		.doc = "Compute the UDP checksum of IPv4-UDP packets whose value is zero? Otherwise drop the packet.",
 		.offset = offsetof(struct jool_globals, siit.compute_udp_csum_zero),
-		.xt = XT_SIIT,
 	}, {
 		.id = JNLAG_HAIRPIN_MODE,
 		.name = "eam-hairpin-mode",
@@ -830,21 +703,18 @@ static const struct joolnl_global_meta globals_metadata[] = {
 		.doc = "Defines how EAM+hairpinning is handled.\n"
 				"(0 = Disabled; 1 = Simple; 2 = Intrinsic)",
 		.offset = offsetof(struct jool_globals, siit.eam_hairpin_mode),
-		.xt = XT_SIIT,
 	}, {
 		.id = JNLAG_RANDOMIZE_ERROR_ADDR,
 		.name = "randomize-rfc6791-addresses",
 		.type = &gt_bool,
 		.doc = "Randomize selection of address from the RFC6791 pool? Otherwise choose the 'Hop Limit'th address.",
 		.offset = offsetof(struct jool_globals, siit.randomize_error_addresses),
-		.xt = XT_SIIT,
 	}, {
 		.id = JNLAG_POOL6791V6,
 		.name = "rfc6791v6-prefix",
 		.type = &gt_prefix6,
 		.doc = "IPv6 prefix to generate RFC6791v6 addresses from.",
 		.offset = offsetof(struct jool_globals, siit.rfc6791_prefix6),
-		.xt = XT_SIIT,
 #ifdef __KERNEL__
 		.nl2raw = nl2raw_pool6791v6,
 #endif
@@ -854,155 +724,9 @@ static const struct joolnl_global_meta globals_metadata[] = {
 		.type = &gt_prefix4,
 		.doc = "IPv4 prefix to generate RFC6791 addresses from.",
 		.offset = offsetof(struct jool_globals, siit.rfc6791_prefix4),
-		.xt = XT_SIIT,
 #ifdef __KERNEL__
 		.nl2raw = nl2raw_pool6791v4,
 #endif
-	}, {
-		.id = JNLAG_DROP_BY_ADDR,
-		.name = "address-dependent-filtering",
-		.type = &gt_bool,
-		.doc = "Use Address-Dependent Filtering? ON is (address)-restricted-cone NAT, OFF is full-cone NAT.",
-		.offset = offsetof(struct jool_globals, nat64.bib.drop_by_addr),
-		.xt = XT_NAT64,
-	}, {
-		.id = JNLAG_DROP_EXTERNAL_TCP,
-		.name = "drop-externally-initiated-tcp",
-		.type = &gt_bool,
-		.doc = "Drop externally initiated TCP connections?",
-		.offset = offsetof(struct jool_globals, nat64.bib.drop_external_tcp),
-		.xt = XT_NAT64,
-	}, {
-		.id = JNLAG_DROP_ICMP6_INFO,
-		.name = "drop-icmpv6-info",
-		.type = &gt_bool,
-		.doc = "Filter ICMPv6 Informational packets?",
-		.offset = offsetof(struct jool_globals, nat64.drop_icmp6_info),
-		.xt = XT_NAT64,
-	}, {
-		.id = JNLAG_SRC_ICMP6_BETTER,
-		.name = "source-icmpv6-errors-better",
-		.type = &gt_bool,
-		.doc = "Translate source addresses directly on 4-to-6 ICMP errors?",
-		.offset = offsetof(struct jool_globals, nat64.src_icmp6errs_better),
-		.xt = XT_NAT64,
-	}, {
-		.id = JNLAG_F_ARGS,
-		.name = "f-args",
-		.type = &gt_uint8,
-		.doc = "Defines the arguments that will be sent to F().\n"
-			"(F() is defined by algorithm 3 of RFC 6056.)\n"
-			"- First (leftmost) bit is source address.\n"
-			"- Second bit is source port.\n"
-			"- Third bit is destination address.\n"
-			"- Fourth (rightmost) bit is destination port.",
-		.offset = offsetof(struct jool_globals, nat64.f_args),
-		.xt = XT_NAT64,
-#ifdef __KERNEL__
-		.nl2raw = nl2raw_f_args,
-#else
-		.print = print_fargs,
-#endif
-	}, {
-		.id = JNLAG_HANDLE_RST,
-		.name = "handle-rst-during-fin-rcv",
-		.type = &gt_bool,
-		.doc = "Use transitory timer when RST is received during the V6 FIN RCV or V4 FIN RCV states?",
-		.offset = offsetof(struct jool_globals, nat64.handle_rst_during_fin_rcv),
-		.xt = XT_NAT64,
-	}, {
-		.id = JNLAG_TTL_TCP_EST,
-		.name = "tcp-est-timeout",
-		.type = &gt_timeout,
-		.doc = "Set the TCP established session lifetime (HH:MM:SS.mmm).",
-		.offset = offsetof(struct jool_globals, nat64.bib.ttl.tcp_est),
-		.xt = XT_NAT64,
-#ifdef __KERNEL__
-		.nl2raw = nl2raw_ttl_tcp_est,
-#endif
-	}, {
-		.id = JNLAG_TTL_TCP_TRANS,
-		.name = "tcp-trans-timeout",
-		.type = &gt_timeout,
-		.doc = "Set the TCP transitory session lifetime (HH:MM:SS.mmm).",
-		.offset = offsetof(struct jool_globals, nat64.bib.ttl.tcp_trans),
-		.xt = XT_NAT64,
-#ifdef __KERNEL__
-		.nl2raw = nl2raw_ttl_tcp_trans,
-#endif
-	}, {
-		.id = JNLAG_TTL_UDP,
-		.name = "udp-timeout",
-		.type = &gt_timeout,
-		.doc = "Set the UDP session lifetime (HH:MM:SS.mmm).",
-		.offset = offsetof(struct jool_globals, nat64.bib.ttl.udp),
-		.xt = XT_NAT64,
-#ifdef __KERNEL__
-		.nl2raw = nl2raw_ttl_udp,
-#endif
-	}, {
-		.id = JNLAG_TTL_ICMP,
-		.name = "icmp-timeout",
-		.type = &gt_timeout,
-		.doc = "Set the timeout for ICMP sessions (HH:MM:SS.mmm).",
-		.offset = offsetof(struct jool_globals, nat64.bib.ttl.icmp),
-		.xt = XT_NAT64,
-	}, {
-		.id = JNLAG_BIB_LOGGING,
-		.name = "logging-bib",
-		.type = &gt_bool,
-		.doc = "Log BIBs as they are created and destroyed?",
-		.offset = offsetof(struct jool_globals, nat64.bib.bib_logging),
-		.xt = XT_NAT64,
-	}, {
-		.id = JNLAG_SESSION_LOGGING,
-		.name = "logging-session",
-		.type = &gt_bool,
-		.doc = "Log sessions as they are created and destroyed?",
-		.offset = offsetof(struct jool_globals, nat64.bib.session_logging),
-		.xt = XT_NAT64,
-	}, {
-		.id = JNLAG_MAX_STORED_PKTS,
-		.name = "maximum-simultaneous-opens",
-		.type = &gt_uint32,
-		.doc = "Set the maximum allowable 'simultaneous' Simultaneos Opens of TCP connections.",
-		.offset = offsetof(struct jool_globals, nat64.bib.max_stored_pkts),
-		.xt = XT_NAT64,
-	}, {
-		.id = JNLAG_JOOLD_ENABLED,
-		.name = "ss-enabled",
-		.type = &gt_bool,
-		.doc = "Enable Session Synchronization?",
-		.offset = offsetof(struct jool_globals, nat64.joold.enabled),
-		.xt = XT_NAT64,
-	}, {
-		.id = JNLAG_JOOLD_FLUSH_ASAP,
-		.name = "ss-flush-asap",
-		.type = &gt_bool,
-		.doc = "Try to synchronize sessions as soon as possible?",
-		.offset = offsetof(struct jool_globals, nat64.joold.flush_asap),
-		.xt = XT_NAT64,
-	}, {
-		.id = JNLAG_JOOLD_FLUSH_DEADLINE,
-		.name = "ss-flush-deadline",
-		.type = &gt_uint32,
-		.doc = "Inactive milliseconds after which to force a session sync.",
-		.offset = offsetof(struct jool_globals, nat64.joold.flush_deadline),
-		.xt = XT_NAT64,
-	}, {
-		.id = JNLAG_JOOLD_CAPACITY,
-		.name = "ss-capacity",
-		.type = &gt_uint32,
-		.doc = "Maximim number of queuable entries.",
-		.offset = offsetof(struct jool_globals, nat64.joold.capacity),
-		.xt = XT_NAT64,
-	}, {
-		.id = JNLAG_JOOLD_MAX_PAYLOAD,
-		.name = "ss-max-payload",
-		.type = &gt_uint32,
-		.doc = "Maximum amount of bytes joold should send per packet.",
-		.offset = offsetof(struct jool_globals, nat64.joold.max_payload),
-		.xt = XT_NAT64,
 	},
 };
 
@@ -1062,11 +786,6 @@ enum joolnl_attr_global joolnl_global_meta_id(
 char const *joolnl_global_meta_name(struct joolnl_global_meta const *meta)
 {
 	return meta->name;
-}
-
-xlator_type joolnl_global_meta_xt(struct joolnl_global_meta const *meta)
-{
-	return meta->xt;
 }
 
 char const *joolnl_global_meta_values(struct joolnl_global_meta const *meta)

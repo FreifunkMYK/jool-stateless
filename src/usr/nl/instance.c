@@ -22,7 +22,6 @@ static struct jool_result entry2attr(struct instance_entry_usr *entry,
 		goto nla_put_failure;
 
 	NLA_PUT_U32(msg, JNLAIE_NS, entry->ns);
-	NLA_PUT_U8(msg, JNLAIE_XF, entry->xf);
 	NLA_PUT_STRING(msg, JNLAIE_INAME, entry->iname);
 
 	nla_nest_end(msg, root);
@@ -44,7 +43,6 @@ static struct jool_result attr2entry(struct nlattr *root,
 		return result;
 
 	entry->ns = nla_get_u32(attrs[JNLAIE_NS]);
-	entry->xf = nla_get_u8(attrs[JNLAIE_XF]);
 	strcpy(entry->iname, nla_get_string(attrs[JNLAIE_INAME]));
 	return result_success();
 }
@@ -148,16 +146,11 @@ struct jool_result joolnl_instance_hello(struct joolnl_socket *sk,
 }
 
 struct jool_result joolnl_instance_add(struct joolnl_socket *sk,
-		xlator_framework xf, char const *iname,
-		struct ipv6_prefix const *pool6)
+		char const *iname, struct ipv6_prefix const *pool6)
 {
 	struct nl_msg *msg;
 	struct nlattr *root;
 	struct jool_result result;
-
-	result.error = xf_validate(xf);
-	if (result.error)
-		return result_from_error(result.error, XF_VALIDATE_ERRMSG);
 
 	result = joolnl_alloc_msg(sk, iname, JNLOP_INSTANCE_ADD, 0, &msg);
 	if (result.error)
@@ -167,7 +160,6 @@ struct jool_result joolnl_instance_add(struct joolnl_socket *sk,
 	if (!root)
 		goto nla_put_failure;
 
-	NLA_PUT_U8(msg, JNLAIA_XF, xf);
 	if (nla_put_prefix6(msg, JNLAIA_POOL6, pool6) < 0)
 		goto nla_put_failure;
 

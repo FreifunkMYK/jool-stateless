@@ -1,4 +1,4 @@
-PROJECTS = common siit nat64
+PROJECTS = common siit
 OTHER_TARGETS = modules modules_install clean debug
 
 

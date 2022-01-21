@@ -4,7 +4,6 @@
 #include <netlink/attr.h>
 #include "common/config.h"
 #include "usr/util/result.h"
-#include "usr/nl/session.h"
 
 #define foreach_entry(pos, ghdr, rem) \
 	nla_for_each_attr( \
@@ -31,9 +30,6 @@ struct jool_result nla_get_prefix4(struct nlattr *attr, struct ipv4_prefix *out)
 struct jool_result nla_get_taddr6(struct nlattr *attr, struct ipv6_transport_addr *out);
 struct jool_result nla_get_taddr4(struct nlattr *attr, struct ipv4_transport_addr *out);
 struct jool_result nla_get_eam(struct nlattr *attr, struct eamt_entry *out);
-struct jool_result nla_get_pool4(struct nlattr *attr, struct pool4_entry *out);
-struct jool_result nla_get_bib(struct nlattr *attr, struct bib_entry *out);
-struct jool_result nla_get_session(struct nlattr *attr, struct session_entry_usr *out);
 struct jool_result nla_get_plateaus(struct nlattr *attr, struct mtu_plateaus *out);
 
 /*
@@ -64,13 +60,5 @@ int nla_put_prefix6(struct nl_msg *msg, int attrtype, struct ipv6_prefix const *
 int nla_put_prefix4(struct nl_msg *msg, int attrtype, struct ipv4_prefix const *prefix);
 int nla_put_plateaus(struct nl_msg *msg, int attrtype, struct mtu_plateaus const *plateaus);
 int nla_put_eam(struct nl_msg *msg, int attrtype, struct eamt_entry const *entry);
-int nla_put_pool4(struct nl_msg *msg, int attrtype, struct pool4_entry const *entry);
-int nla_put_bib(struct nl_msg *msg, int attrtype, struct bib_entry const *entry);
-int nla_put_bib_attrs(struct nl_msg *msg, int attrtype,
-		struct ipv6_transport_addr const *addr6,
-		struct ipv4_transport_addr const *addr4,
-		l4_protocol proto,
-		bool is_static);
-int nla_put_session(struct nl_msg *msg, int attrtype, struct session_entry_usr const *entry);
 
 #endif /* SRC_USR_NL_ATTRIBUTE_H_ */

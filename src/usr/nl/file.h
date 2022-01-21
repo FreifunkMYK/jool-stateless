@@ -6,7 +6,6 @@
 
 struct jool_result joolnl_file_parse(
 	struct joolnl_socket *sk,
-	xlator_type xt,
 	char const *iname,
 	char const *file_name,
 	bool force

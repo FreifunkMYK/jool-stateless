@@ -8,7 +8,6 @@
 #include "mod/common/rfc7915/core.h"
 #include "mod/common/steps/compute_outgoing_tuple.h"
 #include "mod/common/steps/determine_incoming_tuple.h"
-#include "mod/common/steps/filtering_and_updating.h"
 #include "mod/common/steps/send_packet.h"
 
 static verdict validate_xlator(struct xlation *state)
@@ -17,10 +16,6 @@ static verdict validate_xlator(struct xlation *state)
 
 	if (!cfg->enabled)
 		return untranslatable(state, JSTAT_XLATOR_DISABLED);
-	if (xlation_is_nat64(state) && !cfg->pool6.set) {
-		log_warn_once("Cannot translate; pool6 is unset.");
-		return untranslatable(state, JSTAT_POOL6_UNSET);
-	}
 
 	return VERDICT_CONTINUE;
 }
@@ -29,17 +24,6 @@ static verdict core_common(struct xlation *state)
 {
 	verdict result;
 
-	if (xlation_is_nat64(state)) {
-		result = determine_in_tuple(state);
-		if (result != VERDICT_CONTINUE)
-			return result;
-		result = filtering_and_updating(state);
-		if (result != VERDICT_CONTINUE)
-			return result;
-		result = compute_out_tuple(state);
-		if (result != VERDICT_CONTINUE)
-			return result;
-	}
 	result = translating_the_packet(state);
 	if (result != VERDICT_CONTINUE)
 		return result;

@@ -14,7 +14,6 @@ struct cmd_option {
 	 * This being NULL signals the end of the array.
 	 */
 	char const *label;
-	xlator_type xt;
 	/** Hide this option from the user? */
 	bool hidden;
 

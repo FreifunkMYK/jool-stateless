@@ -4,7 +4,6 @@
 #include "usr/argp/log.h"
 #include "usr/argp/userspace-types.h"
 #include "usr/argp/wargp.h"
-#include "usr/argp/xlator_type.h"
 #include "usr/nl/core.h"
 #include "usr/nl/global.h"
 
@@ -45,7 +44,7 @@ int handle_global_display(char *iname, int argc, char **argv, void const *arg)
 	if (result.error)
 		return result.error;
 
-	result = joolnl_setup(&sk, xt_get());
+	result = joolnl_setup(&sk);
 	if (result.error)
 		return pr_result(&result);
 
@@ -97,7 +96,7 @@ static int handle_global_update(char *iname, int argc, char **argv, void const *
 		return -EINVAL;
 	}
 
-	result = joolnl_setup(&sk, xt_get());
+	result = joolnl_setup(&sk);
 	if (result.error)
 		return pr_result(&result);
 	result = joolnl_global_update(&sk, iname, field, uargs.global_str.value, uargs.force.value);
@@ -125,7 +124,6 @@ struct cmd_option *build_global_update_children(void)
 	opt = opts;
 	joolnl_global_foreach_meta(meta) {
 		opt->label = joolnl_global_meta_name(meta);
-		opt->xt = joolnl_global_meta_xt(meta);
 		opt->handler = handle_global_update;
 		opt->handle_autocomplete = autocomplete_global_update;
 		opt->args = meta;

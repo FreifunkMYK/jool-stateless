@@ -4,7 +4,6 @@
 #include "mod/common/icmp_wrapper.h"
 #include "mod/common/packet.h"
 #include "mod/common/xlator.h"
-#include "mod/common/db/bib/entry.h"
 
 /*
  * Fields that need to be translated prematurely because the routing functions
@@ -58,12 +57,6 @@ struct xlation {
 	struct dst_entry *dst;
 
 	/**
-	 * Convenient accesor to the BIB and session entries that correspond
-	 * to the packet being translated, so you don't have to find them again.
-	 */
-	struct bib_session entries;
-
-	/**
 	 * Intrinsic hairpin?
 	 * Intrinsic EAM hairpinning only. RFC6052 hairpin and Simple EAM
 	 * hairpin don't need any flags.
@@ -88,8 +81,5 @@ verdict drop(struct xlation *state, enum jool_stat_id stat);
 verdict drop_icmp(struct xlation *state, enum jool_stat_id stat,
 		enum icmp_errcode icmp, __u32 info);
 verdict stolen(struct xlation *state, enum jool_stat_id stat);
-
-#define xlation_is_siit(state) xlator_is_siit(&(state)->jool)
-#define xlation_is_nat64(state) xlator_is_nat64(&(state)->jool)
 
 #endif /* SRC_MOD_COMMON_TRANSLATION_STATE_H_ */

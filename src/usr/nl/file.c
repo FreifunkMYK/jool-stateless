@@ -15,19 +15,15 @@
 #include "usr/nl/json.h"
 
 #define OPTNAME_INAME 			"instance"
-#define OPTNAME_FW			"framework"
 #define OPTNAME_GLOBAL			"global"
 #define OPTNAME_EAMT			"eamt"
 #define OPTNAME_BLACKLIST		"blacklist4"
 #define OPTNAME_DENYLIST		"denylist4"
-#define OPTNAME_POOL4			"pool4"
-#define OPTNAME_BIB			"bib"
 #define OPTNAME_MAX_ITERATIONS		"max-iterations"
 
 /* TODO (warning) These variables prevent this module from being thread-safe. */
 static struct joolnl_socket sk;
 static char const *iname;
-static xlator_flags flags;
 static __u8 force;
 
 struct json_meta {
@@ -273,96 +269,6 @@ static struct jool_result json2prefix4(cJSON *json, void const *arg1, void *arg2
 			: string_expected(json->string, json);
 }
 
-static struct jool_result json2mark(cJSON *json, void const *arg1, void *arg2)
-{
-	__u32 *mark = arg2;
-	struct jool_result result;
-
-	result = validate_uint(json->string, json, 0, MAX_U32);
-	if (result.error)
-		return result;
-
-	*mark = json->valueint;
-	return result;
-}
-
-static struct jool_result json2port_range(cJSON *json, void const *arg1, void *arg2)
-{
-	return (json->type == cJSON_String)
-			? str_to_port_range(json->valuestring, arg2)
-			: string_expected(json->string, json);
-}
-
-static struct jool_result json2max_iterations(cJSON *json,
-		void const *arg1, void *arg2)
-{
-	struct pool4_entry *entry = arg2;
-	struct jool_result result;
-
-	switch (json->type) {
-	case cJSON_Number:
-		result = validate_uint(OPTNAME_MAX_ITERATIONS, json, 1, MAX_U32);
-		if (result.error)
-			return result;
-		entry->flags = ITERATIONS_SET;
-		entry->iterations = json->valueuint;
-		return result_success();
-
-	case cJSON_String:
-		if (strcmp(json->valuestring, "auto") == 0) {
-			entry->flags = ITERATIONS_SET | ITERATIONS_AUTO;
-			entry->iterations = 0;
-			return result_success();
-		}
-
-		if (strcmp(json->valuestring, "infinity") == 0) {
-			entry->flags = ITERATIONS_SET | ITERATIONS_INFINITE;
-			entry->iterations = 0;
-			return result_success();
-		}
-
-		return result_from_error(
-			-EINVAL,
-			"Unrecognized string: '%s'", json->valuestring
-		);
-	}
-
-	return type_mismatch(OPTNAME_MAX_ITERATIONS, json, "string or number");
-}
-
-static struct jool_result json2taddr6(cJSON *json, void const *arg1, void *arg2)
-{
-	return (json->type == cJSON_String)
-			? str_to_addr6_port(json->valuestring, arg2)
-			: string_expected(json->string, json);
-}
-
-static struct jool_result json2taddr4(cJSON *json, void const *arg1, void *arg2)
-{
-	return (json->type == cJSON_String)
-			? str_to_addr4_port(json->valuestring, arg2)
-			: string_expected(json->string, json);
-}
-
-static struct jool_result json2proto(cJSON *json, void const *arg1, void *arg2)
-{
-	l4_protocol proto;
-
-	if (json->type != cJSON_String)
-		return string_expected(json->string, json);
-
-	proto = str_to_l4proto(json->valuestring);
-	if (proto == L4PROTO_OTHER) {
-		return result_from_error(
-			-EINVAL,
-			"Protocol '%s' is unknown.", json->valuestring
-		);
-	}
-
-	*((__u8 *)arg2) = proto;
-	return result_success();
-}
-
 /*
  * =================================
  * ===== Database tag handlers =====
@@ -405,56 +311,6 @@ static struct jool_result handle_denylist_entry(cJSON *json, struct nl_msg *msg)
 			: result_success();
 }
 
-static struct jool_result handle_pool4_entry(cJSON *json, struct nl_msg *msg)
-{
-	struct pool4_entry entry;
-	struct json_meta meta[] = {
-		{ "mark", json2mark, NULL, &entry.mark, false },
-		{ "protocol", json2proto, NULL, &entry.proto, true },
-		{ "prefix", json2prefix4, NULL, &entry.range.prefix, true },
-		{ "port range", json2port_range, NULL, &entry.range.ports, false },
-		{ OPTNAME_MAX_ITERATIONS, json2max_iterations, NULL, &entry, false },
-		{ NULL },
-	};
-	struct jool_result result;
-
-	entry.mark = 0;
-	entry.range.ports.min = DEFAULT_POOL4_MIN_PORT;
-	entry.range.ports.max = DEFAULT_POOL4_MAX_PORT;
-	entry.iterations = 0;
-	entry.flags = 0;
-
-	result = handle_object(json, meta);
-	if (result.error)
-		return result;
-
-	return (nla_put_pool4(msg, JNLAL_ENTRY, &entry) < 0)
-			? joolnl_err_msgsize()
-			: result_success();
-}
-
-static struct jool_result handle_bib_entry(cJSON *json, struct nl_msg *msg)
-{
-	struct bib_entry entry;
-	struct json_meta meta[] = {
-		{ "ipv6 address", json2taddr6, NULL, &entry.addr6, true },
-		{ "ipv4 address", json2taddr4, NULL, &entry.addr4, true },
-		{ "protocol", json2proto, NULL, &entry.l4_proto, true },
-		{ NULL },
-	};
-	struct jool_result result;
-
-	entry.is_static = true;
-
-	result = handle_object(json, meta);
-	if (result.error)
-		return result;
-
-	return (nla_put_bib(msg, JNLAL_ENTRY, &entry) < 0)
-			? joolnl_err_msgsize()
-			: result_success();
-}
-
 /*
  * ==========================================
  * = Second level tag handlers, second pass =
@@ -486,16 +342,6 @@ static struct jool_result handle_dl4_tag(cJSON *json, void const *arg1, void *ar
 	return handle_array(json, JNLAR_BL4_ENTRIES, OPTNAME_DENYLIST, handle_denylist_entry);
 }
 
-static struct jool_result handle_pool4_tag(cJSON *json, void const *arg1, void *arg2)
-{
-	return handle_array(json, JNLAR_POOL4_ENTRIES, OPTNAME_POOL4, handle_pool4_entry);
-}
-
-static struct jool_result handle_bib_tag(cJSON *json, void const *arg1, void *arg2)
-{
-	return handle_array(json, JNLAR_BIB_ENTRIES, OPTNAME_BIB, handle_bib_entry);
-}
-
 /*
  * ==================================
  * = Root tag handlers, second pass =
@@ -507,26 +353,10 @@ static struct jool_result parse_siit_json(cJSON *json)
 	struct json_meta meta[] = {
 		/* instance and framework were already handled. */
 		{ OPTNAME_INAME, do_nothing, NULL, NULL, true },
-		{ OPTNAME_FW, do_nothing, NULL, NULL, true },
 		{ OPTNAME_GLOBAL, handle_global_tag, NULL, NULL, false },
 		{ OPTNAME_EAMT, handle_eamt_tag, NULL, NULL, false },
 		{ OPTNAME_BLACKLIST, handle_bl4_tag, NULL, NULL, false },
 		{ OPTNAME_DENYLIST, handle_dl4_tag, NULL, NULL, false },
-		{ NULL },
-	};
-
-	return handle_object(json, meta);
-}
-
-static struct jool_result parse_nat64_json(cJSON *json)
-{
-	struct json_meta meta[] = {
-		/* instance and framework were already handled. */
-		{ OPTNAME_INAME, do_nothing, NULL, NULL, true },
-		{ OPTNAME_FW, do_nothing, NULL, NULL, true },
-		{ OPTNAME_GLOBAL, handle_global_tag, NULL, NULL, false },
-		{ OPTNAME_POOL4, handle_pool4_tag, NULL, NULL, false },
-		{ OPTNAME_BIB, handle_bib_tag, NULL, NULL, false },
 		{ NULL },
 	};
 
@@ -563,26 +393,6 @@ static struct jool_result handle_instance_tag(cJSON *json, void const *_iname,
 	return result_success();
 }
 
-static struct jool_result handle_framework_tag(cJSON *json,
-		void const *arg1, void *arg2)
-{
-	if (json->type != cJSON_String)
-		return string_expected(json->string, json);
-
-	if (STR_EQUAL(json->valuestring, "netfilter")) {
-		flags |= XF_NETFILTER;
-		return result_success();
-	} else if (STR_EQUAL(json->valuestring, "iptables")) {
-		flags |= XF_IPTABLES;
-		return result_success();
-	}
-
-	return result_from_error(
-		-EINVAL,
-		"Unknown framework: '%s'", json->valuestring
-	);
-}
-
 /*
  * ================================
  * = Root tag handler, first pass =
@@ -590,20 +400,17 @@ static struct jool_result handle_framework_tag(cJSON *json,
  */
 
 /*
- * Sets the @iname and @flags global variables according to @_iname and @json.
+ * Sets the @iname global variable according to @_iname and @json.
  */
 static struct jool_result prepare_instance(char const *_iname, cJSON *json)
 {
 	struct json_meta meta[] = {
 		{ OPTNAME_INAME, handle_instance_tag, _iname, NULL, false },
-		{ OPTNAME_FW, handle_framework_tag, NULL, NULL, true },
 		/* The rest will be handled later. */
 		{ OPTNAME_GLOBAL, do_nothing },
 		{ OPTNAME_EAMT, do_nothing },
 		{ OPTNAME_BLACKLIST, do_nothing },
 		{ OPTNAME_DENYLIST, do_nothing },
-		{ OPTNAME_POOL4, do_nothing },
-		{ OPTNAME_BIB, do_nothing },
 		{ NULL },
 	};
 	struct jool_result result;
@@ -650,7 +457,7 @@ static struct jool_result send_ctrl_msg(bool init)
 		return result;
 
 	if (init)
-		NLA_PUT_U8(msg, JNLAR_ATOMIC_INIT, xlator_flags2xf(flags));
+		NLA_PUT(msg, JNLAR_ATOMIC_INIT, 0, NULL);
 	else
 		NLA_PUT(msg, JNLAR_ATOMIC_END, 0, NULL);
 
@@ -687,19 +494,7 @@ static struct jool_result do_parsing(char const *iname, char *buffer)
 	if (result.error)
 		goto fail;
 
-	switch (xlator_flags2xt(flags)) {
-	case XT_SIIT:
-		result = parse_siit_json(json);
-		break;
-	case XT_NAT64:
-		result = parse_nat64_json(json);
-		break;
-	default:
-		result = result_from_error(
-			-EINVAL,
-			"Invalid translator type: %d", xlator_flags2xt(flags)
-		);
-	}
+	result = parse_siit_json(json);
 
 	if (result.error)
 		goto fail;
@@ -717,14 +512,13 @@ fail:
 	return result;
 }
 
-struct jool_result joolnl_file_parse(struct joolnl_socket *_sk, xlator_type xt,
+struct jool_result joolnl_file_parse(struct joolnl_socket *_sk,
 		char const *iname, char const *file_name, bool _force)
 {
 	char *buffer;
 	struct jool_result result;
 
 	sk = *_sk;
-	flags = xt;
 	force = _force ? JOOLNLHDR_FLAGS_FORCE : 0;
 
 	result = file_to_string(file_name, &buffer);

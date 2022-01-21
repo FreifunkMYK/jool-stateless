@@ -29,7 +29,6 @@ struct xlator {
 	 */
 	struct net *ns;
 	char iname[INAME_MAX_SIZE];
-	xlator_flags flags;
 
 	struct jool_stats *stats;
 	struct jool_globals globals;
@@ -41,7 +40,6 @@ struct xlator {
 		struct {
 			struct pool4 *pool4;
 			struct bib *bib;
-			struct joold_queue *joold;
 		} nat64;
 	};
 
@@ -52,55 +50,29 @@ struct xlator {
 /* User context (reads and writes) */
 
 int xlator_setup(void);
-void xlator_set_defrag(void (*defrag_enable)(struct net *ns));
 void xlator_teardown(void);
 
-int xlator_add(xlator_flags flags, char *iname, struct ipv6_prefix *pool6,
+int xlator_add(char *iname, struct ipv6_prefix *pool6,
 		struct xlator *result);
-int xlator_rm(xlator_type xt, char *iname);
-int xlator_flush(xlator_type xt);
-void jool_xlator_flush_net(struct net *ns, xlator_type xt);
-void jool_xlator_flush_batch(struct list_head *net_exit_list, xlator_type xt);
+int xlator_rm(char *iname);
+int xlator_flush(void);
+void jool_xlator_flush_net(struct net *ns);
+void jool_xlator_flush_batch(struct list_head *net_exit_list);
 
 int xlator_init(struct xlator *jool, struct net *ns, char *iname,
-		xlator_flags flags, struct ipv6_prefix *pool6);
+		struct ipv6_prefix *pool6);
 int xlator_replace(struct xlator *jool);
 
 /* Any context (reads) */
 
-int xlator_find(struct net *ns, xlator_flags flags, const char *iname,
+int xlator_find(struct net *ns, const char *iname,
 		struct xlator *result);
-int xlator_find_current(const char *iname, xlator_flags flags,
-		struct xlator *result);
+int xlator_find_current(const char *iname, struct xlator *result);
 int xlator_find_netfilter(struct net *ns, struct xlator *result);
 void xlator_put(struct xlator *instance);
 
 typedef int (*xlator_foreach_cb)(struct xlator *, void *);
-int xlator_foreach(xlator_type xt, xlator_foreach_cb cb, void *args,
+int xlator_foreach(xlator_foreach_cb cb, void *args,
 		struct instance_entry_usr *offset);
-
-xlator_type xlator_get_type(struct xlator const *instance);
-xlator_framework xlator_get_framework(struct xlator const *instance);
-
-static inline bool xlator_is_siit(struct xlator const *instance)
-{
-	return instance->flags & XT_SIIT;
-}
-
-static inline bool xlator_is_nat64(struct xlator const *instance)
-{
-	return instance->flags & XT_NAT64;
-}
-
-static inline bool xlator_is_netfilter(struct xlator const *instance)
-{
-	return instance->flags & XF_NETFILTER;
-}
-
-static inline bool xlator_is_iptables(struct xlator const *instance)
-{
-	return instance->flags & XF_IPTABLES;
-}
-
 
 #endif /* SRC_MOD_COMMON_XLATOR_H_ */
